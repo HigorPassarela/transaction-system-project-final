@@ -7,7 +7,7 @@ import java.util.Optional;
 
 public interface SaldoContaRepository extends CrudRepository<SaldoConta, String> {
 
-    Optional<SaldoConta> findByNumeroConta(String numeroConta);
-
-    boolean existsByNumeroConta(String numeroConta);
+//    Optional<SaldoConta> findByNumeroConta(String numeroConta);
+//
+//    boolean existsByNumeroConta(String numeroConta);
 }

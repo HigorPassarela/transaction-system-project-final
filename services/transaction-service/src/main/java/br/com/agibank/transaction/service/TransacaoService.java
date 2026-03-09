@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -132,7 +133,8 @@ public class TransacaoService {
     }
 
     private SaldoConta buscarOuCriarSaldoConta(String numeroConta) {
-        return saldoContaRepository.findByNumeroConta(numeroConta)
+        // Usar findById ao invés de findByNumeroConta
+        return saldoContaRepository.findById(numeroConta)
                 .orElseGet(() -> {
                     logger.info("Criando nova conta: {}", numeroConta);
                     SaldoConta novaConta = new SaldoConta(
@@ -149,7 +151,13 @@ public class TransacaoService {
     }
 
     public SaldoConta consultarSaldo(String numeroConta) {
-        return saldoContaRepository.findByNumeroConta(numeroConta)
-                .orElse(null);
+        logger.info("=== CONSULTANDO NO REPOSITORY ===");
+        logger.info("Buscando conta: [{}]", numeroConta);
+
+        // Usar findById ao invés de findByNumeroConta
+        Optional<SaldoConta> resultado = saldoContaRepository.findById(numeroConta);
+        logger.info("Resultado Optional.isPresent(): {}", resultado.isPresent());
+
+        return resultado.orElse(null);
     }
 }
