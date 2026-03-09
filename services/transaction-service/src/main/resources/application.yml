@@ -31,3 +31,5 @@ springdoc:
 logging:
   level:
     br.com.agibank: DEBUG
+    org.springframework.data.redis: DEBUG
+    root: INFO
