@@ -7,48 +7,37 @@ plugins {
 
 group = 'br.com.agibank'
 version = '1.0.0'
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+sourceCompatibility = '17'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    
-    // MongoDB
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
-    
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Swagger/OpenAPI
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+
     // PDF Generation
     implementation 'com.itextpdf:itext7-core:7.2.5'
-    
-    // OpenAPI/Swagger
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
-    
-    // Test dependencies
+
+    // Jackson para JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:mongodb'
-    
-    // Annotation processors
-    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.testcontainers:mongodb:1.19.0'
+    testImplementation 'org.testcontainers:kafka:1.19.0'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.0'
 }
 
-dependencyManagement {
-    imports {
-        mavenBom 'org.testcontainers:testcontainers-bom:1.19.3'
-    }
-}
-
-tasks.named('test') {
+test {
     useJUnitPlatform()
     finalizedBy jacocoTestReport
 }
@@ -56,16 +45,14 @@ tasks.named('test') {
 jacocoTestReport {
     dependsOn test
     reports {
-        xml.required = true
-        html.required = true
+        xml.required = false
+        csv.required = false
+        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
     }
 }
 
-jacoco {
-    toolVersion = "0.8.11"
-}
-
 jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
     violationRules {
         rule {
             limit {
@@ -75,4 +62,6 @@ jacocoTestCoverageVerification {
     }
 }
 
-check.dependsOn jacocoTestCoverageVerification
+check {
+    dependsOn jacocoTestCoverageVerification
+}
