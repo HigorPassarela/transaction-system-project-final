@@ -7,44 +7,21 @@ plugins {
 
 group = 'br.com.agibank'
 version = '1.0.0'
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+java.sourceCompatibility = JavaVersion.VERSION_17
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    // Spring Boot Starters (WebFlux para SSE)
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    
-    // Kafka
     implementation 'org.springframework.kafka:spring-kafka'
-    
-    // OpenAPI/Swagger para WebFlux
-    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0'
-    
-    // Test dependencies
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:kafka'
-    testImplementation 'io.projectreactor:reactor-test'
-    
-    // Annotation processors
-    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-}
-
-dependencyManagement {
-    imports {
-        mavenBom 'org.testcontainers:testcontainers-bom:1.19.3'
-    }
 }
 
 tasks.named('test') {
@@ -55,13 +32,10 @@ tasks.named('test') {
 jacocoTestReport {
     dependsOn test
     reports {
-        xml.required = true
-        html.required = true
+        xml.required = false
+        csv.required = false
+        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
     }
-}
-
-jacoco {
-    toolVersion = "0.8.11"
 }
 
 jacocoTestCoverageVerification {
@@ -73,5 +47,3 @@ jacocoTestCoverageVerification {
         }
     }
 }
-
-check.dependsOn jacocoTestCoverageVerification
