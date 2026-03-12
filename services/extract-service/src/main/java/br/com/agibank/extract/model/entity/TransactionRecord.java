@@ -12,7 +12,9 @@ import java.time.LocalDateTime;
 
 @Document(collection = "transactions")
 @CompoundIndexes({
-        @CompoundIndex(name = "conta_data_idx", def = "{'numeroConta': 1, 'dataHora': -1}")
+        @CompoundIndex(name = "conta_data_idx", def = "{'numeroConta': 1, 'dataHora': -1}"),
+        @CompoundIndex(name = "conta_tipo_idx", def = "{'numeroConta': 1, 'tipo': 1}"),
+        @CompoundIndex(name = "status_data_idx", def = "{'status': 1, 'dataHora': -1}")
 })
 public class TransactionRecord {
 
@@ -31,12 +33,14 @@ public class TransactionRecord {
     private BigDecimal valor;
 
     @Field("tipo")
+    @Indexed
     private String tipo;
 
     @Field("descricao")
     private String descricao;
 
     @Field("status")
+    @Indexed
     private String status;
 
     @Field("dataHora")
@@ -46,17 +50,26 @@ public class TransactionRecord {
     @Field("saldoAtual")
     private BigDecimal saldoAtual;
 
-    @Field("created_at")
+    @Field("createdAt")
     private LocalDateTime createdAt;
 
+    // === CAMPOS PARA CAMUNDA ===
+    @Field("processedByCamunda")
+    private Boolean processedByCamunda = false;
+
+    @Field("workflowInstanceId")
+    private String workflowInstanceId;
+
+    // Construtores
     public TransactionRecord() {
         this.createdAt = LocalDateTime.now();
+        this.processedByCamunda = false;
     }
 
     public TransactionRecord(String transactionId, String numeroConta, BigDecimal valor,
                              String tipo, String descricao, String status,
                              LocalDateTime dataHora, BigDecimal saldoAtual) {
-        this(); // Chama o construtor padrão
+        this();
         this.transactionId = transactionId;
         this.numeroConta = numeroConta;
         this.valor = valor;
@@ -67,6 +80,7 @@ public class TransactionRecord {
         this.saldoAtual = saldoAtual;
     }
 
+    // Getters e Setters COMPLETOS
     public String getId() {
         return id;
     }
@@ -145,5 +159,35 @@ public class TransactionRecord {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    // === GETTERS E SETTERS PARA CAMUNDA ===
+    public Boolean getProcessedByCamunda() {
+        return processedByCamunda;
+    }
+
+    public void setProcessedByCamunda(Boolean processedByCamunda) {
+        this.processedByCamunda = processedByCamunda;
+    }
+
+    // Método de conveniência
+    public boolean isProcessedByCamunda() {
+        return processedByCamunda != null && processedByCamunda;
+    }
+
+    public String getWorkflowInstanceId() {
+        return workflowInstanceId;
+    }
+
+    public void setWorkflowInstanceId(String workflowInstanceId) {
+        this.workflowInstanceId = workflowInstanceId;
+    }
+
+    @Override
+    public String toString() {
+        return String.format(
+                "TransactionRecord{id='%s', transactionId='%s', numeroConta='%s', valor=%s, tipo='%s', processedByCamunda=%s, workflowInstanceId='%s'}",
+                id, transactionId, numeroConta, valor, tipo, processedByCamunda, workflowInstanceId
+        );
     }
 }

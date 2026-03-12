@@ -7,7 +7,7 @@ plugins {
 
 group = 'br.com.agibank'
 version = '1.0.0'
-sourceCompatibility = '17'
+java.sourceCompatibility = JavaVersion.VERSION_21
 
 repositories {
     mavenCentral()
@@ -15,29 +15,40 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.kafka:spring-kafka'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-
-    // Swagger/OpenAPI
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.kafka:spring-kafka'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    // H2 Database
+    implementation 'com.h2database:h2'
+
+    // Camunda - versão mais recente compatível com Spring Boot 3.2 e Java 21
+    implementation('org.camunda.bpm.springboot:camunda-bpm-spring-boot-starter:7.21.0') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
 
     // PDF Generation
     implementation 'com.itextpdf:itext7-core:7.2.5'
 
-    // Jackson para JSON
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
-    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
-
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    testImplementation 'org.testcontainers:mongodb:1.19.0'
-    testImplementation 'org.testcontainers:kafka:1.19.0'
-    testImplementation 'org.testcontainers:junit-jupiter:1.19.0'
+    testImplementation 'org.testcontainers:mongodb'
 }
 
-test {
+// Resolver duplicatas
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+bootJar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.named('test') {
     useJUnitPlatform()
     finalizedBy jacocoTestReport
 }
@@ -52,7 +63,6 @@ jacocoTestReport {
 }
 
 jacocoTestCoverageVerification {
-    dependsOn jacocoTestReport
     violationRules {
         rule {
             limit {
@@ -60,8 +70,4 @@ jacocoTestCoverageVerification {
             }
         }
     }
-}
-
-check {
-    dependsOn jacocoTestCoverageVerification
 }

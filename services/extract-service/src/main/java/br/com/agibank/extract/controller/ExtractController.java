@@ -3,7 +3,9 @@ package br.com.agibank.extract.controller;
 import br.com.agibank.extract.model.dto.ExtractRequest;
 import br.com.agibank.extract.model.dto.ExtractResponse;
 import br.com.agibank.extract.model.dto.TransactionDTO;
+import br.com.agibank.extract.model.entity.TransactionRecord;
 import br.com.agibank.extract.service.ExtractService;
+import br.com.agibank.extract.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -18,19 +20,25 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/extratos")
-@Tag(name = "Extratos", description = "API para geração de extratos bancários")
+@Tag(name = "Extratos", description = "API para geração de extratos bancários com workflow Camunda")
 public class ExtractController {
 
     private static final Logger logger = LoggerFactory.getLogger(ExtractController.class);
 
     private final ExtractService extractService;
+    private final NotificationService notificationService;
 
-    public ExtractController(ExtractService extractService) {
+    public ExtractController(ExtractService extractService,
+                             NotificationService notificationService) {
         this.extractService = extractService;
+        this.notificationService = notificationService;
     }
 
     @PostMapping
@@ -62,11 +70,6 @@ public class ExtractController {
 
     @PostMapping("/pdf")
     @Operation(summary = "Gerar extrato PDF", description = "Gera extrato bancário em formato PDF")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "PDF gerado com sucesso"),
-            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
-            @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
-    })
     public ResponseEntity<byte[]> gerarExtratoPdf(@Valid @RequestBody ExtractRequest request) {
         logger.info("Solicitação de PDF do extrato: conta={}, período={} a {}",
                 request.numeroConta(), request.dataInicial(), request.dataFinal());
@@ -96,11 +99,7 @@ public class ExtractController {
     }
 
     @GetMapping("/ultimas/{numeroConta}")
-    @Operation(summary = "Consultar últimas transações", description = "Consulta as últimas N transações de uma conta")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Transações consultadas com sucesso"),
-            @ApiResponse(responseCode = "400", description = "Parâmetros inválidos")
-    })
+    @Operation(summary = "Consultar últimas transações")
     public ResponseEntity<List<TransactionDTO>> consultarUltimasTransacoes(
             @Parameter(description = "Número da conta", example = "12345678")
             @PathVariable String numeroConta,
@@ -114,28 +113,84 @@ public class ExtractController {
         }
 
         List<TransactionDTO> transacoes = extractService.consultarUltimasTransacoes(numeroConta, limite);
-        logger.info("Encontradas {} transações para conta {}", transacoes.size(), numeroConta);
-
         return ResponseEntity.ok(transacoes);
     }
 
     @GetMapping("/count/{numeroConta}")
-    @Operation(summary = "Contar transações", description = "Conta o total de transações de uma conta")
-    public ResponseEntity<Long> contarTransacoes(
+    @Operation(summary = "Contar transações")
+    public ResponseEntity<Map<String, Object>> contarTransacoes(
             @Parameter(description = "Número da conta", example = "12345678")
             @PathVariable String numeroConta) {
 
-        logger.info("Contando transações da conta {}", numeroConta);
-
         long count = extractService.contarTransacoes(numeroConta);
-        logger.info("Conta {} possui {} transações", numeroConta, count);
 
-        return ResponseEntity.ok(count);
+        Map<String, Object> response = new HashMap<>();
+        response.put("numeroConta", numeroConta);
+        response.put("totalTransacoes", count);
+        response.put("timestamp", LocalDateTime.now());
+
+        return ResponseEntity.ok(response);
+    }
+
+    // === ENDPOINTS DO CAMUNDA ===
+
+    @GetMapping("/camunda/status")
+    @Operation(summary = "Status do Camunda", description = "Verifica status da conexão com Camunda")
+    public ResponseEntity<Map<String, Object>> statusCamunda() {
+        logger.info("Verificando status do Camunda");
+
+        Map<String, Object> status = extractService.getStatusCamunda();
+        return ResponseEntity.ok(status);
+    }
+
+    @GetMapping("/camunda/transacoes-pendentes")
+    @Operation(summary = "Transações pendentes de workflow")
+    public ResponseEntity<List<TransactionRecord>> transacoesPendentes() {
+        logger.info("Buscando transações pendentes de processamento pelo Camunda");
+
+        List<TransactionRecord> pendentes = extractService.buscarTransacoesPendentesWorkflow();
+
+        logger.info("Encontradas {} transações pendentes", pendentes.size());
+        return ResponseEntity.ok(pendentes);
+    }
+
+    @PostMapping("/teste-notificacao")
+    @Operation(summary = "Testar serviço de notificações")
+    public ResponseEntity<Map<String, Object>> testarNotificacao() {
+        logger.info("Testando conexão com serviço de notificações");
+
+        try {
+            boolean sucesso = notificationService.testarConexao();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("servicoNotificacoes", sucesso ? "ONLINE" : "OFFLINE");
+            response.put("timestamp", LocalDateTime.now());
+            response.put("url", "http://localhost:8083");
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Erro ao testar notificação: {}", e.getMessage(), e);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("servicoNotificacoes", "ERRO");
+            response.put("erro", e.getMessage());
+            response.put("timestamp", LocalDateTime.now());
+
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+        }
     }
 
     @GetMapping("/health")
-    @Operation(summary = "Health check", description = "Verifica se o serviço está funcionando")
-    public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("Extract Service está funcionando!");
+    @Operation(summary = "Health check")
+    public ResponseEntity<Map<String, Object>> healthCheck() {
+        Map<String, Object> health = new HashMap<>();
+        health.put("status", "UP");
+        health.put("service", "Extract Service");
+        health.put("camunda", extractService.getStatusCamunda());
+        health.put("timestamp", LocalDateTime.now());
+        health.put("version", "1.0.0");
+
+        return ResponseEntity.ok(health);
     }
 }

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Schema(description = "Resposta com dados do extrato")
@@ -27,6 +28,15 @@ public record ExtractResponse(
         List<TransactionDTO> transacoes,
 
         @Schema(description = "Total de transações encontradas", example = "15")
-        int totalTransacoes
+        int totalTransacoes,
+
+        @Schema(description = "Data e hora de geração do extrato")
+        LocalDateTime dataGeracao
 ) {
+
+    public ExtractResponse {
+        if (dataGeracao == null) {
+            dataGeracao = LocalDateTime.now();
+        }
+    }
 }

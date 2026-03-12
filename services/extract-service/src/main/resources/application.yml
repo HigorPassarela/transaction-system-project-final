@@ -5,6 +5,24 @@ spring:
   application:
     name: extract-service
 
+  # H2 para Camunda
+  datasource:
+    url: jdbc:h2:mem:camunda;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: sa
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
@@ -16,20 +34,44 @@ spring:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: "*"
       enable-auto-commit: false
-  
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
   data:
     mongodb:
       uri: mongodb://localhost:27017/agibank_extracts
       database: agibank_extracts
 
+# Configurações do Camunda para versão 7.21
+camunda.bpm:
+  admin-user:
+    id: admin
+    password: admin
+    firstName: Admin
+    lastName: User
+  filter:
+    create: All tasks
+  job-execution:
+    enabled: true
+    core-pool-size: 3
+    max-pool-size: 10
+    queue-capacity: 100
+  database:
+    schema-update: true
+    type: h2
+  history-level: full
+
+services:
+  notifications-service:
+    url: http://localhost:8083
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
-  endpoint:
-    health:
-      show-details: always
+        include: health,info,metrics
 
 springdoc:
   api-docs:
@@ -40,8 +82,9 @@ springdoc:
 logging:
   level:
     br.com.agibank.extract: DEBUG
+    org.camunda: INFO
     org.springframework.data.mongodb: INFO
     org.springframework.kafka: INFO
+    org.hibernate: WARN
+    org.h2: WARN
     root: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
