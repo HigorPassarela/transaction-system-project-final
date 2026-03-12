@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -53,18 +54,26 @@ public class NotificationController {
     }
 
     @PostMapping("/send")
-    public ResponseEntity<Map<String, Object>> enviarNotificacao(@RequestBody Map<String, Object> request) {
-        logger.info("📨 Recebida solicitação de notificação do Camunda: {}", request);
+    @Operation(summary = "Enviar notificação", description = "Recebe notificação do Camunda e envia via SSE")
+    public ResponseEntity<Map<String, Object>> enviarNotificacao(@RequestBody Map<String, Object> payload) {
+
+        logger.info("📨 Recebida solicitação de notificação do Camunda: {}", payload);
 
         try {
-            // Extrair dados do request
-            String numeroConta = (String) request.get("numeroConta");
-            String idTransacao = (String) request.get("idTransacao");
-            String tipo = (String) request.get("tipo");
+            // Extrair dados do payload com conversão segura
+            String idTransacao = (String) payload.get("idTransacao");
+            String numeroConta = (String) payload.get("numeroConta");
 
-            // ✅ CORREÇÃO: Tratar valores que podem vir como Double
-            String valor = convertToString(request.get("valor"));
-            String saldoAtual = convertToString(request.get("saldoAtual"));
+            // ✅ CORREÇÃO: Converter Double/Number para String de forma segura
+            String tipo = (String) payload.get("tipo");
+            String status = (String) payload.get("status");
+
+            // Converter valores numéricos de forma segura
+            BigDecimal valor = convertToBigDecimal(payload.get("valor"));
+            BigDecimal saldoAtual = convertToBigDecimal(payload.get("saldoAtual"));
+
+            // Converter dataHora de forma segura
+            LocalDateTime dataHora = convertToLocalDateTime(payload.get("dataHora"));
 
             // Validações básicas
             if (numeroConta == null || idTransacao == null) {
@@ -72,13 +81,12 @@ public class NotificationController {
                 errorResponse.put("status", "ERROR");
                 errorResponse.put("message", "Dados obrigatórios ausentes (numeroConta, idTransacao)");
                 errorResponse.put("timestamp", LocalDateTime.now());
-
                 return ResponseEntity.badRequest().body(errorResponse);
             }
 
             // Criar mensagem de notificação
             String tipoIcon = "DEBITO".equals(tipo) ? "🔻" : "🔺";
-            String mensagem = String.format("%s Transação %s de R$ %s processada. Saldo: R$ %s",
+            String mensagem = String.format("%s Transação %s de R$ %.2f processada. Saldo: R$ %.2f",
                     tipoIcon, tipo, valor, saldoAtual);
 
             // Criar objeto de notificação
@@ -89,18 +97,18 @@ public class NotificationController {
             notificacao.put("mensagem", mensagem);
             notificacao.put("tipo", tipo);
             notificacao.put("valor", valor);
-            notificacao.put("timestamp", LocalDateTime.now());
+            notificacao.put("timestamp", dataHora != null ? dataHora : LocalDateTime.now());
 
             // Enviar via SSE
             sseService.enviarNotificacaoGenerica(numeroConta, notificacao);
 
             logger.info("✅ Notificação enviada com sucesso para conta {} - transação {}", numeroConta, idTransacao);
 
+            // Resposta de sucesso
             Map<String, Object> response = new HashMap<>();
             response.put("status", "SUCCESS");
             response.put("message", "Notificação enviada com sucesso");
-            response.put("numeroConta", numeroConta);
-            response.put("idTransacao", idTransacao);
+            response.put("transactionId", idTransacao);
             response.put("timestamp", LocalDateTime.now());
 
             return ResponseEntity.ok(response);
@@ -108,23 +116,45 @@ public class NotificationController {
         } catch (Exception e) {
             logger.error("❌ Erro ao processar notificação: {}", e.getMessage(), e);
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "ERROR");
-            response.put("message", "Erro ao processar notificação: " + e.getMessage());
-            response.put("timestamp", LocalDateTime.now());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "ERROR");
+            errorResponse.put("message", "Erro interno: " + e.getMessage());
+            errorResponse.put("timestamp", LocalDateTime.now());
 
-            return ResponseEntity.status(500).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
 
-    // ✅ ADICIONE ESTE MÉTODO HELPER
-    private String convertToString(Object value) {
-        if (value == null) return "0.00";
-        if (value instanceof String) return (String) value;
-        if (value instanceof Double) return String.format("%.2f", (Double) value);
-        if (value instanceof BigDecimal) return ((BigDecimal) value).toString();
-        if (value instanceof Number) return String.format("%.2f", ((Number) value).doubleValue());
-        return value.toString();
+    // ✅ Métodos auxiliares para conversão segura
+    private BigDecimal convertToBigDecimal(Object value) {
+        if (value == null) return BigDecimal.ZERO;
+        if (value instanceof BigDecimal) return (BigDecimal) value;
+        if (value instanceof Double) return BigDecimal.valueOf((Double) value);
+        if (value instanceof Integer) return BigDecimal.valueOf((Integer) value);
+        if (value instanceof String) return new BigDecimal((String) value);
+        return BigDecimal.ZERO;
+    }
+
+    private LocalDateTime convertToLocalDateTime(Object value) {
+        if (value == null) return LocalDateTime.now();
+        if (value instanceof LocalDateTime) return (LocalDateTime) value;
+        if (value instanceof String) return LocalDateTime.parse((String) value);
+        // Se for array (como vem do Camunda), converter
+        if (value instanceof java.util.List) {
+            java.util.List<?> dateArray = (java.util.List<?>) value;
+            if (dateArray.size() >= 6) {
+                return LocalDateTime.of(
+                        ((Number) dateArray.get(0)).intValue(), // ano
+                        ((Number) dateArray.get(1)).intValue(), // mês
+                        ((Number) dateArray.get(2)).intValue(), // dia
+                        ((Number) dateArray.get(3)).intValue(), // hora
+                        ((Number) dateArray.get(4)).intValue(), // minuto
+                        ((Number) dateArray.get(5)).intValue(), // segundo
+                        dateArray.size() > 6 ? ((Number) dateArray.get(6)).intValue() : 0 // nano
+                );
+            }
+        }
+        return LocalDateTime.now();
     }
 
     @GetMapping("/status/{numeroConta}")
